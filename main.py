@@ -1,16 +1,22 @@
-# This is a sample Python script.
+"""
+CSC 325-03 Project 1
 
-# Press ⌃R to execute it or replace it with your code.
-# Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
+"""
+
+import nest_asyncio
+import tensorflow as tf
+import tensorflow_federated as tff
+import numpy as np
 
 
-def main(args):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {args}')  # Press ⌘F8 to toggle the breakpoint.
+def main():
+    np.random.seed(0)
+    nest_asyncio.apply()
+
+    tff.federated_computation(lambda: 'Hello, World!')()
 
 
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    main('PyCharm')
+    main()
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
