@@ -13,11 +13,11 @@ import numpy as np
 
 # =========== Configuration ==========
 NUM_CLIENTS = 10
-NUM_EPOCHS = 5
+NUM_EPOCHS = 20
 BATCH_SIZE = 20
 SHUFFLE_BUFFER = 100
 PREFETCH_BUFFER = 10
-NUM_TRAINING_ROUNDS = 11
+NUM_TRAINING_ROUNDS = 50
 
 
 # ================ Helper Functions =============================
@@ -151,7 +151,8 @@ def make_federated_data(client_data, ids):
 def create_keras_model():
     return tf.keras.models.Sequential([
         tf.keras.layers.InputLayer(input_shape=(784, )),
-        tf.keras.layers.Dense(10, kernel_initializer='zeros'),
+        tf.keras.layers.Dense(100),
+        tf.keras.layers.Dense(10),
         tf.keras.layers.Softmax(),
     ])
 
@@ -209,7 +210,11 @@ def main():
         #   decreases with each iteration, which indicates convergence => i.e. the goal
         state, metrics = iterative_process.next(state, federated_training_data)
         print(f"Round {round_num:2d}, metrics={metrics}")
+    
 
+def evaluate(model, train, test):
+    pass
+    
     # Model is trained
 
 
