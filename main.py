@@ -14,9 +14,6 @@ import numpy as np
 import argparse
 import tensorflow_datasets as tfds
 
-from evaluate import evaluation_summary
-
-
 # =========== Configuration ==========
 NUM_CLIENTS = 10
 NUM_EPOCHS = 20
@@ -33,8 +30,9 @@ def _batch_format(elm):
         y=tf.reshape(elm['label'], [-1, 1])
     )
 
+
 def preprocess(dataset):
-    return dataset.repeat(NUM_EPOCHS).shuffle(SHUFFLE_BUFFER, seed=1)\
+    return dataset.repeat(NUM_EPOCHS).shuffle(SHUFFLE_BUFFER, seed=1) \
         .batch(BATCH_SIZE).map(_batch_format).prefetch(PREFETCH_BUFFER)
 
 
@@ -51,6 +49,8 @@ def showPlot():
 
     plt.grid(False)
     plt.show()
+
+
 # ==================================================================
 
 
@@ -71,6 +71,8 @@ def showPreprocessedData(dataset):
     sample = tf.nest.map_structure(lambda x: x.numpy(),
                                    next(iter(preprocessed)))
     print(sample)
+
+
 # ====================================================================
 
 
@@ -142,6 +144,8 @@ def demo4(training_data):
             plt.axis('off')
 
         showPlot()
+
+
 # ============================================================
 
 
@@ -155,7 +159,7 @@ def make_federated_data(client_data, ids):
 
 def create_keras_model():
     return tf.keras.models.Sequential([
-        tf.keras.layers.InputLayer(input_shape=(784, )),
+        tf.keras.layers.InputLayer(input_shape=(784,)),
         tf.keras.layers.Dense(128),
         tf.keras.layers.Dense(10),
         tf.keras.layers.Softmax(),
@@ -184,51 +188,8 @@ class MulticlassTruePositives(tf.keras.metrics.Metric):
         # The state of the metric will be reset at the start of each epoch.
         self.true_positives.assign(0.)
 
-# class MulticlassFalsePositives(tf.keras.metrics.Metric):
-#     def __init__(self, name='multiclass_true_positives', **kwargs):
-#         super().__init__(name=name, **kwargs)
-#         self.true_positives = self.add_weight(name='tp', initializer='zeros')
-
-#     def update_state(self, y_true, y_pred, sample_weight=None):
-#         y_pred = tf.reshape(tf.argmax(y_pred, axis=1), shape=(-1, 1))
-#         values = tf.cast(y_true, 'int32') != tf.cast(y_pred, 'int32')
-#         values = tf.cast(values, 'float32')
-#         if sample_weight is not None:
-#             sample_weight = tf.cast(sample_weight, 'float32')
-#             values = tf.multiply(values, sample_weight)
-#         self.true_positives.assign_add(tf.reduce_sum(values))
-
-#     def result(self):
-#         return self.true_positives
-
-#     def reset_states(self):
-#         # The state of the metric will be reset at the start of each epoch.
-#         self.true_positives.assign(0.)
-
-# class MulticlassFalsePositives(tf.keras.metrics.Metric):
-#     def __init__(self, name='multiclass_true_positives', **kwargs):
-#         super().__init__(name=name, **kwargs)
-#         self.true_positives = self.add_weight(name='tp', initializer='zeros')
-
-#     def update_state(self, y_true, y_pred, sample_weight=None):
-#         y_pred = tf.reshape(tf.argmax(y_pred, axis=1), shape=(-1, 1))
-#         values = tf.cast(y_true, 'int32') == tf.cast(y_pred, 'int32')
-#         values = tf.cast(values, 'float32')
-#         if sample_weight is not None:
-#             sample_weight = tf.cast(sample_weight, 'float32')
-#             values = tf.multiply(values, sample_weight)
-#         self.true_positives.assign_add(tf.reduce_sum(values))
-
-#     def result(self):
-#         return self.true_positives
-
-#     def reset_states(self):
-#         # The state of the metric will be reset at the start of each epoch.
-#         self.true_positives.assign(0.)
 
 def get_iterative_process(model_fn):
-
-
     return tff.learning.build_federated_averaging_process(
         model_fn=model_fn,
         client_optimizer_fn=lambda: tf.keras.optimizers.SGD(learning_rate=.02),
@@ -260,16 +221,21 @@ def train_model(iterative_process, ds_train, num_rounds, num_clients):
 
     return state
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_rounds', help="number of training rounds to perform",default=NUM_TRAINING_ROUNDS, type=int)
-    parser.add_argument('--num_users', help="number of users to distribute training across", default=NUM_CLIENTS, type=int)
+    parser.add_argument('--num_rounds', help="number of training rounds to perform", default=NUM_TRAINING_ROUNDS,
+                        type=int)
+    parser.add_argument('--num_users', help="number of users to distribute training across", default=NUM_CLIENTS,
+                        type=int)
 
     return parser.parse_args()
+
 
 def get_data_for_clients(ds_train, num_clients):
     sample_clients = random.sample(ds_train.client_ids, k=num_clients)
     return make_federated_data(ds_train, sample_clients)
+
 
 def evaluate(test_data, evaluation, state):
     trials = 20
@@ -277,28 +243,28 @@ def evaluate(test_data, evaluation, state):
     for i in range(trials):
         test_metrics = evaluation(state.model, get_data_for_clients(test_data, 10))
         avg_acc += test_metrics['eval']['sparse_categorical_accuracy']
-        #print(str(test_metrics))
+
     avg_acc /= trials
 
     print(f"Average categorical accuracy ({trials} user sets): {avg_acc}")
 
+
 def load_centralized():
-    (ds_train, ds_test), ds_info = tfds.load('mnist', 
-        split=['train', 'test'],
-        shuffle_files=True,
-        as_supervised=True,
-        with_info=True)
-    
-    return (ds_train, ds_test, ds_info)
+    (ds_train, ds_test), ds_info = tfds.load('mnist',
+                                             split=['train', 'test'],
+                                             shuffle_files=True,
+                                             as_supervised=True,
+                                             with_info=True)
+
+    return ds_train, ds_test, ds_info
+
 
 def preprocess_centralized(ds_train, ds_test, ds_info):
-    #ds_train = ds_train.map(normalize_img, num_parallel_calls=tf.data.AUTOTUNE)
     ds_train = ds_train.cache()
     ds_train = ds_train.shuffle(ds_info.splits['train'].num_examples)
     ds_train = ds_train.batch(128)
     ds_train = ds_train.prefetch(tf.data.AUTOTUNE)
 
-    #ds_test = ds_test.map(normalize_img, num_parallel_calls = tf.data.AUTOTUNE)
     ds_test = ds_test.batch(128)
     ds_test = ds_test.map(lambda img, label: (tf.reshape(img, [-1, 784]), tf.reshape(label, [-1, 1])))
     ds_test = ds_test.cache()
@@ -306,7 +272,8 @@ def preprocess_centralized(ds_train, ds_test, ds_info):
 
     print(ds_test)
 
-    return (ds_train, ds_test)
+    return ds_train, ds_test
+
 
 def main():
     # run necessary configuration tasks
@@ -322,16 +289,6 @@ def main():
     # create a dataset
     example_dataset = emnist_train.create_tf_dataset_for_client(
         emnist_train.client_ids[0])
-    
-    #ds_test = emnist_test.create_tf_dataset_from_all_clients()
-
-    # Sample: either first {NUM_CLIENTS} clients OR {NUM_CLIENTS} random clients
-    # sample_clients = emnist_train.client_ids[0:NUM_CLIENTS]
-
-
-    # print(f'Number of client datasets: {len(federated_training_data)}')
-    # print(f'First dataset: {federated_training_data[0]}')
-
 
     preprocessed_dataset = preprocess(example_dataset)
 
@@ -348,31 +305,12 @@ def main():
     # print(iterative_process.initialize.type_signature.formatted_representation())
 
     state = train_model(iterative_process, emnist_train, args.num_rounds, args.num_users)
+    # Model is trained
 
-#    test_model = create_keras_model()
-    #state.model.assign_weights_to(test_model)
-#    print(np.argmax(test_model.predict(cmnist_processed_test), axis=1))
-#    rep, conf_matrix = evaluation_summary(test_model, cmnist_processed_test, cmnist_info)
-#    print(rep)
-#    print(conf_matrix)
-    
     # Start evaluation of the trained model
     evaluation = tff.learning.build_federated_evaluation(_get_model)
     evaluate(emnist_test, evaluation, state)
-    # print(evaluation.type_signature.formatted_representation())
-
-    # train_metrics = evaluation(state.model, federated_training_data)
-    # print(str(train_metrics))
-
-    # federated_testing_data = make_federated_data(emnist_test, sample_clients)
-    # print(len(federated_testing_data), federated_testing_data[0])
-
-    # print(str(test_metrics))
-
-    # Model is trained
 
 
 if __name__ == '__main__':
     main()
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
