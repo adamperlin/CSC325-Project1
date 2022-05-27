@@ -4,6 +4,8 @@ CSC 325-03 Project 1
 """
 
 import collections
+import random
+
 import nest_asyncio
 from matplotlib import pyplot as plt
 import tensorflow as tf
@@ -157,23 +159,37 @@ def create_keras_model():
     ])
 
 
-def get_iterative_process(dataset):
-    preprocessed_dataset = preprocess(dataset)
+def get_iterative_process(model_fn):
 
-    def _get_model():
-        model = create_keras_model()
-        return tff.learning.from_keras_model(
-            model,
-            input_spec=preprocessed_dataset.element_spec,
-            loss=tf.keras.losses.SparseCategoricalCrossentropy(),
-            metrics=[tf.keras.metrics.SparseCategoricalAccuracy()]
-        )
 
     return tff.learning.build_federated_averaging_process(
-        model_fn=_get_model,
+        model_fn=model_fn,
         client_optimizer_fn=lambda: tf.keras.optimizers.SGD(learning_rate=.02),
         server_optimizer_fn=lambda: tf.keras.optimizers.SGD(learning_rate=1.0)
     )
+
+
+def train_model(iterative_process, train_data):
+    logdir = "/tmp/logs/scalars/training/"
+    summary_writer = tf.summary.create_file_writer(logdir)
+    state = iterative_process.initialize()
+
+    # run one round of training
+    # state, metrics = iterative_process.next(state, federated_training_data)
+    # print(f"round 1, metrics={metrics}")
+
+    # run {11} rounds of training, logging output
+    with summary_writer.as_default():
+        for round_num in range(NUM_TRAINING_ROUNDS):
+            # NOTE: the key observation here is that the loss parameter in the model
+            #   decreases with each iteration, which indicates convergence => i.e. the goal
+            state, metrics = iterative_process.next(state, train_data)
+
+            # print metric data to summary
+            for name, value in metrics['train'].items():
+                tf.summary.scalar(name, value, step=round_num)
+
+    return state
 
 
 def main():
@@ -187,33 +203,45 @@ def main():
     example_dataset = emnist_train.create_tf_dataset_for_client(
         emnist_train.client_ids[0])
 
-    sample_clients = emnist_train.client_ids[0:NUM_CLIENTS]
+    # Sample: either first {NUM_CLIENTS} clients OR {NUM_CLIENTS} random clients
+    # sample_clients = emnist_train.client_ids[0:NUM_CLIENTS]
+    sample_clients = random.sample(emnist_train.client_ids, k=NUM_CLIENTS)
 
-    # TODO: implement random sampling for better fitting
     federated_training_data = make_federated_data(emnist_train, sample_clients)
 
     print(f'Number of client datasets: {len(federated_training_data)}')
     print(f'First dataset: {federated_training_data[0]}')
 
-    iterative_process = get_iterative_process(example_dataset)
+    preprocessed_dataset = preprocess(example_dataset)
+
+    def _get_model():
+        model = create_keras_model()
+        return tff.learning.from_keras_model(
+            model,
+            input_spec=preprocessed_dataset.element_spec,
+            loss=tf.keras.losses.SparseCategoricalCrossentropy(),
+            metrics=[tf.keras.metrics.SparseCategoricalAccuracy(),
+                     ]
+        )
+
+    iterative_process = get_iterative_process(_get_model)
     # print(iterative_process.initialize.type_signature.formatted_representation())
 
-    state = iterative_process.initialize()
+    state = train_model(iterative_process, federated_training_data)
 
-    # run one round of training
-    # state, metrics = iterative_process.next(state, federated_training_data)
-    # print(f"round 1, metrics={metrics}")
+    # Start evaluation of the trained model
+    evaluation = tff.learning.build_federated_evaluation(_get_model)
+    # print(evaluation.type_signature.formatted_representation())
 
-    # run {11} rounds of training
-    for round_num in range(NUM_TRAINING_ROUNDS):
-        # NOTE: the key observation here is that the loss parameter in the model
-        #   decreases with each iteration, which indicates convergence => i.e. the goal
-        state, metrics = iterative_process.next(state, federated_training_data)
-        print(f"Round {round_num:2d}, metrics={metrics}")
-    
+    # Metrics after training
+    train_metrics = evaluation(state.model, federated_training_data)
+    print(str(train_metrics))
 
-def evaluate(model, train, test):
-    pass
+    federated_testing_data = make_federated_data(emnist_test, sample_clients)
+    print(len(federated_testing_data), federated_testing_data[0])
+
+    test_metrics = evaluation(state.model, federated_testing_data)
+    print(str(test_metrics))
     
     # Model is trained
 
