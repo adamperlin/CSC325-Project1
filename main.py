@@ -274,13 +274,17 @@ def get_data_for_clients(ds_train, num_clients):
 def evaluate(test_data, evaluation, state):
     trials = 20
     avg_acc = 0.0
+    avg_loss = 0.0
     for i in range(trials):
-        test_metrics = evaluation(state.model, get_data_for_clients(test_data, 10))
+        test_metrics = evaluation(state.model, get_data_for_clients(test_data, 100))
         avg_acc += test_metrics['eval']['sparse_categorical_accuracy']
+        avg_loss += test_metrics['eval']['loss']
         #print(str(test_metrics))
     avg_acc /= trials
+    avg_loss /= trials
 
     print(f"Average categorical accuracy ({trials} user sets): {avg_acc}")
+    print(f"Average loss ({trials} user sets): {avg_loss}")
 
 def load_centralized():
     (ds_train, ds_test), ds_info = tfds.load('mnist', 
